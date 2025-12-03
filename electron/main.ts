@@ -54,7 +54,7 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let refreshInterval: NodeJS.Timeout | null = null;
 
-const isDev = process.env.NODE_ENV !== 'production' || !app.isPackaged;
+const isDev = !app.isPackaged;
 
 // Activity log system - keep last 20 entries
 interface LogEntry {
@@ -100,7 +100,11 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:5173');
     // mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
+    // In production, __dirname is inside app.asar/dist-electron
+    // So we need to go up one level to get to dist/index.html
+    const htmlPath = path.join(__dirname, '..', 'dist', 'index.html');
+    console.log('Loading HTML from:', htmlPath);
+    mainWindow.loadFile(htmlPath);
   }
 
   mainWindow.on('blur', () => {
@@ -144,6 +148,66 @@ function createTray() {
     { label: 'Refresh', click: () => refreshAllData() },
     { label: 'Login to Claude', click: () => openLoginWindow() },
     { type: 'separator' },
+    {
+      label: 'About',
+      click: () => {
+        const aboutWindow = new BrowserWindow({
+          width: 300,
+          height: 200,
+          resizable: false,
+          minimizable: false,
+          maximizable: false,
+          title: 'About Claude Usage Tool',
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+          },
+        });
+
+        const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
+        const iconBase64 = fs.existsSync(iconPath)
+          ? 'data:image/png;base64,' + fs.readFileSync(iconPath).toString('base64')
+          : '';
+
+        const html = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <style>
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                margin: 0;
+                background: #1a1a1a;
+                color: #fff;
+                text-align: center;
+                -webkit-user-select: none;
+              }
+              img { width: 64px; height: 64px; margin-bottom: 12px; }
+              h1 { font-size: 16px; margin: 0 0 4px 0; font-weight: 600; }
+              .version { font-size: 12px; color: #888; margin-bottom: 8px; }
+              .author { font-size: 12px; color: #aaa; }
+              a { color: #d97706; text-decoration: none; }
+              a:hover { text-decoration: underline; }
+            </style>
+          </head>
+          <body>
+            <img src="${iconBase64}" alt="icon" />
+            <h1>Claude Usage Tool</h1>
+            <div class="version">ver 0.10</div>
+            <div class="author">by <a href="mailto:kingi@kingigilbert.com">Kingi Gilbert</a></div>
+          </body>
+          </html>
+        `;
+
+        aboutWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+        aboutWindow.setMenu(null);
+      }
+    },
     { label: 'Quit', click: () => app.quit() },
   ]);
 
@@ -161,11 +225,18 @@ function createTray() {
 }
 
 function showWindow() {
-  if (!mainWindow || !tray) return;
+  if (!mainWindow || !tray) {
+    console.log('showWindow: mainWindow or tray is null');
+    return;
+  }
 
   const trayBounds = tray.getBounds();
   const windowBounds = mainWindow.getBounds();
   const display = screen.getDisplayNearestPoint({ x: trayBounds.x, y: trayBounds.y });
+
+  console.log('Tray bounds:', trayBounds);
+  console.log('Window bounds:', windowBounds);
+  console.log('Display bounds:', display.bounds);
 
   // Position window below tray icon (macOS style)
   let x = Math.round(trayBounds.x + trayBounds.width / 2 - windowBounds.width / 2);

@@ -1,6 +1,6 @@
 {
   "name": "claude-usage-tool",
-  "version": "1.0.0",
+  "version": "0.10.0",
   "description": "Menu bar app to track Claude Max subscription usage and API costs",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -23,7 +23,8 @@
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
     "electron": "^28.1.0",
-    "electron-builder": "^24.9.1",
+    "electron-builder": "^24.13.3",
+    "sharp": "^0.34.5",
     "typescript": "^5.3.3",
     "vite": "^5.0.10",
     "wait-on": "^7.2.0"
