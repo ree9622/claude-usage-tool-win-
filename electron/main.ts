@@ -56,6 +56,30 @@ let refreshInterval: NodeJS.Timeout | null = null;
 
 const isDev = process.env.NODE_ENV !== 'production' || !app.isPackaged;
 
+// Activity log system - keep last 20 entries
+interface LogEntry {
+  timestamp: string;
+  message: string;
+}
+const activityLogs: LogEntry[] = [];
+const MAX_LOGS = 20;
+
+function addLog(message: string) {
+  const entry: LogEntry = {
+    timestamp: new Date().toISOString(),
+    message
+  };
+  activityLogs.push(entry);
+  if (activityLogs.length > MAX_LOGS) {
+    activityLogs.shift();
+  }
+  console.log(`[${entry.timestamp}] ${message}`);
+}
+
+function getRecentLogs(count: number = 6): LogEntry[] {
+  return activityLogs.slice(-count);
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 320,
@@ -163,14 +187,38 @@ function showWindow() {
 async function refreshAllData() {
   if (!mainWindow) return;
 
+  addLog('Refreshing data...');
+
   try {
     const [claudeUsage, billingInfo] = await Promise.all([
-      scrapeClaudeUsage().catch(err => {
-        console.error('Failed to scrape Claude usage:', err);
+      scrapeClaudeUsage().then(result => {
+        if (result) {
+          if (result.isAuthenticated) {
+            addLog(`Usage: ${result.bars?.length || 0} bars fetched`);
+          } else {
+            addLog('Usage: Not authenticated');
+          }
+        } else {
+          addLog('Usage: Skipped (in progress)');
+        }
+        return result;
+      }).catch(err => {
+        addLog(`Usage error: ${err.message}`);
         return null;
       }),
-      scrapeBillingInfo().catch(err => {
-        console.error('Failed to scrape billing info:', err);
+      scrapeBillingInfo().then(result => {
+        if (result) {
+          if (result.creditBalance !== null) {
+            addLog(`Billing: $${result.creditBalance.toFixed(2)}`);
+          } else {
+            addLog('Billing: No balance data');
+          }
+        } else {
+          addLog('Billing: Skipped (in progress)');
+        }
+        return result;
+      }).catch(err => {
+        addLog(`Billing error: ${err.message}`);
         return null;
       }),
     ]);
@@ -179,9 +227,11 @@ async function refreshAllData() {
       claudeUsage,
       billingInfo,
       timestamp: new Date().toISOString(),
+      logs: getRecentLogs(6),
     });
   } catch (error) {
-    console.error('Failed to refresh data:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    addLog(`Refresh failed: ${message}`);
   }
 }
 

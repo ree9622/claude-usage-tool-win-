@@ -23,10 +23,16 @@ export interface BillingInfo {
   lastUpdated: string;
 }
 
+export interface LogEntry {
+  timestamp: string;
+  message: string;
+}
+
 export interface RefreshData {
   claudeUsage: ClaudeMaxUsage | null;
   billingInfo: BillingInfo | null;
   timestamp: string;
+  logs?: LogEntry[];
 }
 
 // Window type augmentation for Electron API

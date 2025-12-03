@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ClaudeMaxUsage } from './components/ClaudeMaxUsage';
 import { ApiCosts } from './components/ApiCosts';
-import type { ClaudeMaxUsage as ClaudeMaxUsageType, BillingInfo, RefreshData } from './types';
+import type { ClaudeMaxUsage as ClaudeMaxUsageType, BillingInfo, RefreshData, LogEntry } from './types';
 
 // Check if running inside Electron
 const isElectron = typeof window !== 'undefined' && window.electronAPI !== undefined;
@@ -11,6 +11,7 @@ function App() {
   const [billingInfo, setBillingInfo] = useState<BillingInfo | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
 
   const refreshData = useCallback(async () => {
     if (!isElectron) {
@@ -40,6 +41,9 @@ function App() {
       setClaudeUsage(data.claudeUsage);
       setBillingInfo(data.billingInfo);
       setLastUpdated(new Date(data.timestamp));
+      if (data.logs) {
+        setLogs(data.logs);
+      }
       setLoading(false);
     });
 
@@ -79,10 +83,9 @@ function App() {
     );
   }
 
-  // Build header title
-  const planName = claudeUsage?.plan ? `${claudeUsage.plan} Plan` : 'Claude';
-  const email = claudeUsage?.email;
-  const headerTitle = email ? `${planName} - ${email}` : planName;
+  // Build header title - Claude "Plan" Plan Usage
+  const planName = claudeUsage?.plan || 'Max';
+  const headerTitle = `Claude "${planName}" Plan Usage`;
 
   return (
     <div className="panel" style={{ width: 320, maxHeight: 480, overflowY: 'auto' }}>
@@ -92,15 +95,11 @@ function App() {
         justifyContent: 'space-between',
         alignItems: 'center',
         background: 'var(--bg-secondary)',
-        padding: '10px 12px'
+        padding: '8px 12px'
       }}>
         <span style={{
           fontWeight: 600,
-          fontSize: email ? 11 : 14,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          maxWidth: '180px'
+          fontSize: 13
         }}>
           {headerTitle}
         </span>
@@ -135,15 +134,42 @@ function App() {
         onPlatformLogin={handlePlatformLogin}
       />
 
-      {/* Footer */}
+      {/* Footer with logs */}
       <div style={{
-        padding: '8px 12px',
-        fontSize: 10,
+        padding: '6px 10px',
+        fontSize: 9,
         color: 'var(--text-muted)',
-        textAlign: 'center',
         borderTop: '1px solid var(--border)'
       }}>
-        Auto-refreshes every 60s
+        <div style={{ textAlign: 'center', marginBottom: logs.length > 0 ? 4 : 0 }}>
+          Auto-refreshes every 60s
+        </div>
+        {logs.length > 0 && (
+          <div style={{
+            fontFamily: 'monospace',
+            fontSize: 8,
+            lineHeight: 1.3,
+            maxHeight: 60,
+            overflowY: 'auto',
+            background: 'var(--bg-tertiary)',
+            borderRadius: 4,
+            padding: '4px 6px'
+          }}>
+            {logs.map((log, i) => {
+              const time = new Date(log.timestamp).toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+              });
+              return (
+                <div key={i} style={{ opacity: 0.6 + (i / logs.length) * 0.4 }}>
+                  {time} {log.message}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

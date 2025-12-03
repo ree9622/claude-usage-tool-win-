@@ -19,18 +19,18 @@ export function ApiCosts({ billingInfo, loading, onPlatformLogin }: Props) {
   // Show login prompt if no billing info
   if (!billingInfo || billingInfo.creditBalance === null) {
     return (
-      <div className="section">
+      <div className="section" style={{ paddingTop: 8, paddingBottom: 8 }}>
         <div className="section-title">API Credit</div>
         <div style={{
           background: 'var(--bg-tertiary)',
-          borderRadius: 12,
-          padding: 16,
+          borderRadius: 10,
+          padding: 12,
           textAlign: 'center'
         }}>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: 12, fontSize: 12 }}>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: 10, fontSize: 11 }}>
             Login to Claude Platform to see your API credit balance
           </p>
-          <button className="btn btn-primary" onClick={onPlatformLogin}>
+          <button className="btn btn-primary" onClick={onPlatformLogin} style={{ fontSize: 11, padding: '5px 10px' }}>
             Login to Platform
           </button>
         </div>
@@ -39,27 +39,27 @@ export function ApiCosts({ billingInfo, loading, onPlatformLogin }: Props) {
   }
 
   return (
-    <div className="section">
+    <div className="section" style={{ paddingTop: 8, paddingBottom: 8 }}>
       <div className="section-title">API Credit</div>
 
       {/* Credit Balance Card */}
       <div style={{
         background: 'var(--bg-tertiary)',
-        borderRadius: 12,
-        padding: 20,
+        borderRadius: 10,
+        padding: 14,
         textAlign: 'center'
       }}>
         <div style={{
-          fontSize: 32,
+          fontSize: 26,
           fontWeight: 400,
           color: 'var(--text-primary)',
-          marginBottom: 6,
+          marginBottom: 4,
           letterSpacing: '-0.5px'
         }}>
           US${billingInfo.creditBalance.toFixed(2)}
         </div>
         <div style={{
-          fontSize: 13,
+          fontSize: 11,
           color: 'var(--text-muted)'
         }}>
           Remaining Balance

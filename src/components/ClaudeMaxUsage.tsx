@@ -19,22 +19,22 @@ function UsageBarComponent({
   const percentage = Math.round(bar.percentage);
 
   return (
-    <div style={{ marginBottom: 16 }}>
+    <div style={{ marginBottom: 10 }}>
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'baseline',
-        marginBottom: 6
+        marginBottom: 4
       }}>
         <span style={{
-          fontSize: 13,
+          fontSize: 12,
           color: 'var(--text-primary)',
           fontWeight: 400
         }}>
           {displayLabel}
         </span>
         <span style={{
-          fontSize: 13,
+          fontSize: 12,
           fontWeight: 500,
           color: 'var(--accent)'
         }}>
@@ -54,9 +54,9 @@ function UsageBarComponent({
       </div>
       {resetInfo && (
         <div style={{
-          fontSize: 11,
+          fontSize: 10,
           color: 'var(--text-muted)',
-          marginTop: 4
+          marginTop: 2
         }}>
           {resetInfo}
         </div>
@@ -69,10 +69,9 @@ export function ClaudeMaxUsage({ usage, onLogin, loading }: Props) {
   if (!usage?.isAuthenticated) {
     return (
       <div className="section">
-        <div className="section-title">Claude Usage</div>
         <div style={{
           textAlign: 'center',
-          padding: '16px 0'
+          padding: '12px 0'
         }}>
           <p style={{ color: 'var(--text-secondary)', marginBottom: 12, fontSize: 12 }}>
             Login to Claude to see your subscription usage
@@ -88,7 +87,6 @@ export function ClaudeMaxUsage({ usage, onLogin, loading }: Props) {
   if (loading && !usage) {
     return (
       <div className="section">
-        <div className="section-title">Claude Usage</div>
         <div className="loading">Loading...</div>
       </div>
     );
@@ -101,7 +99,6 @@ export function ClaudeMaxUsage({ usage, onLogin, loading }: Props) {
 
   // Get reset info from bar context
   const getResetInfo = (bar: UsageBarType): string | undefined => {
-    // If bar has context (which contains resetInfo), use it
     if (bar.context) {
       return bar.context;
     }
@@ -118,9 +115,7 @@ export function ClaudeMaxUsage({ usage, onLogin, loading }: Props) {
   };
 
   return (
-    <div className="section">
-      <div className="section-title">Claude Usage</div>
-
+    <div className="section" style={{ paddingTop: 8 }}>
       {bars.length === 0 ? (
         <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: '8px 0' }}>
           No usage data available

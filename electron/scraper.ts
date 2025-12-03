@@ -29,6 +29,8 @@ let scraperWindow: BrowserWindow | null = null;
 let billingWindow: BrowserWindow | null = null;
 let loginWindow: BrowserWindow | null = null;
 let platformLoginWindow: BrowserWindow | null = null;
+let isScrapingUsage = false;
+let isScrapingBilling = false;
 const CLAUDE_USAGE_URL = 'https://claude.ai/settings/usage';
 const CLAUDE_BILLING_URL = 'https://platform.claude.com/settings/billing';
 const CLAUDE_SESSION_NAME = 'claude-session';
@@ -53,6 +55,12 @@ export async function isAuthenticated(): Promise<boolean> {
 }
 
 export async function scrapeClaudeUsage(): Promise<ClaudeMaxUsage | null> {
+  // Prevent concurrent scrapes
+  if (isScrapingUsage) {
+    console.log('Usage scrape already in progress, skipping...');
+    return null;
+  }
+  isScrapingUsage = true;
   console.log('Starting Claude usage scrape...');
 
   return new Promise((resolve) => {
@@ -77,6 +85,7 @@ export async function scrapeClaudeUsage(): Promise<ClaudeMaxUsage | null> {
       if (!resolved) {
         console.log('Scraper timeout reached');
         resolved = true;
+        isScrapingUsage = false;
         scraperWindow?.close();
         scraperWindow = null;
         resolve(null);
@@ -90,6 +99,7 @@ export async function scrapeClaudeUsage(): Promise<ClaudeMaxUsage | null> {
         console.log('Redirected to login - not authenticated');
         if (!resolved) {
           resolved = true;
+          isScrapingUsage = false;
           clearTimeout(timeout);
           scraperWindow?.close();
           scraperWindow = null;
@@ -114,6 +124,7 @@ export async function scrapeClaudeUsage(): Promise<ClaudeMaxUsage | null> {
       // If we're on login page, user is not authenticated
       if (currentUrl.includes('/login') || currentUrl.includes('/signup')) {
         resolved = true;
+        isScrapingUsage = false;
         clearTimeout(timeout);
         scraperWindow?.close();
         scraperWindow = null;
@@ -315,6 +326,7 @@ export async function scrapeClaudeUsage(): Promise<ClaudeMaxUsage | null> {
           console.log('Parsed usage data - bars:', parsed.bars?.length, 'auth:', parsed.isAuthenticated);
 
           resolved = true;
+          isScrapingUsage = false;
           clearTimeout(timeout);
 
           // Safely close window
@@ -354,6 +366,7 @@ export async function scrapeClaudeUsage(): Promise<ClaudeMaxUsage | null> {
         }
         if (!resolved) {
           resolved = true;
+          isScrapingUsage = false;
           clearTimeout(timeout);
           if (scraperWindow && !scraperWindow.isDestroyed()) {
             scraperWindow.close();
@@ -408,6 +421,12 @@ export function openLoginWindow(): Promise<boolean> {
 }
 
 export async function scrapeBillingInfo(): Promise<BillingInfo | null> {
+  // Prevent concurrent scrapes
+  if (isScrapingBilling) {
+    console.log('Billing scrape already in progress, skipping...');
+    return null;
+  }
+  isScrapingBilling = true;
   console.log('Starting billing info scrape...');
 
   return new Promise((resolve) => {
@@ -432,6 +451,7 @@ export async function scrapeBillingInfo(): Promise<BillingInfo | null> {
       if (!resolved) {
         console.log('Billing scraper timeout reached');
         resolved = true;
+        isScrapingBilling = false;
         if (billingWindow && !billingWindow.isDestroyed()) {
           billingWindow.close();
         }
@@ -451,6 +471,7 @@ export async function scrapeBillingInfo(): Promise<BillingInfo | null> {
       if (currentUrl.includes('/login') || currentUrl.includes('/signup')) {
         console.log('Platform requires login');
         resolved = true;
+        isScrapingBilling = false;
         clearTimeout(timeout);
         if (billingWindow && !billingWindow.isDestroyed()) {
           billingWindow.close();
@@ -509,6 +530,7 @@ export async function scrapeBillingInfo(): Promise<BillingInfo | null> {
         if (result) {
           const parsed = JSON.parse(result);
           resolved = true;
+          isScrapingBilling = false;
           clearTimeout(timeout);
 
           if (billingWindow && !billingWindow.isDestroyed()) {
@@ -538,6 +560,7 @@ export async function scrapeBillingInfo(): Promise<BillingInfo | null> {
         }
         if (!resolved) {
           resolved = true;
+          isScrapingBilling = false;
           clearTimeout(timeout);
           if (billingWindow && !billingWindow.isDestroyed()) {
             billingWindow.close();
@@ -572,22 +595,23 @@ export function openPlatformLoginWindow(): Promise<boolean> {
     });
 
     let hasLoggedIn = false;
+    let wasOnLoginPage = false;
 
     platformLoginWindow.on('closed', () => {
       platformLoginWindow = null;
       resolve(hasLoggedIn);
     });
 
-    // Only auto-close when user reaches the billing page after login
+    // Only auto-close when user completes login (transitions from login page to billing page)
     platformLoginWindow.webContents.on('did-finish-load', async () => {
       if (!platformLoginWindow || platformLoginWindow.isDestroyed()) return;
 
       const url = platformLoginWindow.webContents.getURL();
       console.log('Platform login page:', url);
 
-      // Check if we're on the billing page (not login page)
+      // Check if we're on the billing page
       if (url.includes('platform.claude.com/settings/billing')) {
-        // Wait for page to render and check if it's the actual billing page (not login)
+        // Wait for page to render
         await new Promise(r => setTimeout(r, 2000));
 
         if (!platformLoginWindow || platformLoginWindow.isDestroyed()) return;
@@ -597,13 +621,25 @@ export function openPlatformLoginWindow(): Promise<boolean> {
           document.body.innerText.includes('Continue with Google')
         `);
 
-        if (!isLoginPage) {
-          // User is logged in and on billing page
+        if (isLoginPage) {
+          // User needs to login - remember this
+          wasOnLoginPage = true;
+          console.log('Platform requires login, window stays open');
+        } else {
+          // User is logged in
           hasLoggedIn = true;
-          console.log('Platform login successful, closing window...');
-          setTimeout(() => {
-            platformLoginWindow?.close();
-          }, 1500);
+
+          // Only auto-close if user just completed login (was on login page before)
+          // If already logged in from start, keep window open so user can close manually
+          if (wasOnLoginPage) {
+            console.log('Platform login completed, closing window...');
+            setTimeout(() => {
+              platformLoginWindow?.close();
+            }, 1500);
+          } else {
+            console.log('Already logged in to platform, keeping window open');
+            // Don't auto-close - let user close manually or it will close when they navigate away
+          }
         }
       }
     });
