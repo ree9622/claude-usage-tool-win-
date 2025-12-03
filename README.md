@@ -3,7 +3,7 @@
 A lightweight macOS menu bar application that displays your Claude Pro/Max subscription usage and API credit balance at a glance.
 
 <p align="center">
-  <img src="Claude%20Usage%20Tool%201.png" alt="Claude Usage Tool Screenshot" width="320">
+  <img src="Claude%20Usage%20Tool%201.png" alt="Claude Usage Tool Screenshot">
 </p>
 
 ![macOS](https://img.shields.io/badge/platform-macOS-lightgrey)
@@ -30,11 +30,11 @@ If you're a Claude power user, you've probably found yourself:
 ## Demo
 
 <p align="center">
-  <img src="Claude%20Usage%20Tool%203.gif" alt="Claude Usage Tool Demo" width="400">
+  <img src="Claude%20Usage%20Tool%203.gif" alt="Claude Usage Tool Demo">
 </p>
 
 <p align="center">
-  <img src="Claude%20Usage%20Tool%202.png" alt="Claude Usage Tool Screenshot" width="320">
+  <img src="Claude%20Usage%20Tool%202.png" alt="Claude Usage Tool Screenshot">
 </p>
 
 ## Installation
