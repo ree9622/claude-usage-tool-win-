@@ -1,18 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ClaudeMaxUsage } from './components/ClaudeMaxUsage';
 import { ApiCosts } from './components/ApiCosts';
-import { ModelBreakdown } from './components/ModelBreakdown';
-import type { ClaudeMaxUsage as ClaudeMaxUsageType, ApiData, RefreshData } from './types';
+import type { ClaudeMaxUsage as ClaudeMaxUsageType, BillingInfo, RefreshData } from './types';
 
 // Check if running inside Electron
 const isElectron = typeof window !== 'undefined' && window.electronAPI !== undefined;
 
 function App() {
   const [claudeUsage, setClaudeUsage] = useState<ClaudeMaxUsageType | null>(null);
-  const [apiData, setApiData] = useState<ApiData | null>(null);
+  const [billingInfo, setBillingInfo] = useState<BillingInfo | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
-  const [adminKeyConfigured, setAdminKeyConfigured] = useState(false);
 
   const refreshData = useCallback(async () => {
     if (!isElectron) {
@@ -34,18 +32,13 @@ function App() {
       return;
     }
 
-    // Check admin key status
-    window.electronAPI.getAdminKeyStatus().then((status) => {
-      setAdminKeyConfigured(status.configured);
-    });
-
     // Initial data load
     refreshData();
 
     // Listen for auto-refresh updates
     const unsubscribe = window.electronAPI.onDataRefresh((data: RefreshData) => {
       setClaudeUsage(data.claudeUsage);
-      setApiData(data.apiData);
+      setBillingInfo(data.billingInfo);
       setLastUpdated(new Date(data.timestamp));
       setLoading(false);
     });
@@ -58,6 +51,14 @@ function App() {
   const handleLogin = async () => {
     if (!isElectron) return;
     const success = await window.electronAPI.openClaudeLogin();
+    if (success) {
+      refreshData();
+    }
+  };
+
+  const handlePlatformLogin = async () => {
+    if (!isElectron) return;
+    const success = await window.electronAPI.openPlatformLogin();
     if (success) {
       refreshData();
     }
@@ -78,6 +79,11 @@ function App() {
     );
   }
 
+  // Build header title
+  const planName = claudeUsage?.plan ? `${claudeUsage.plan} Plan` : 'Claude';
+  const email = claudeUsage?.email;
+  const headerTitle = email ? `${planName} - ${email}` : planName;
+
   return (
     <div className="panel" style={{ width: 320, maxHeight: 480, overflowY: 'auto' }}>
       {/* Header */}
@@ -88,7 +94,16 @@ function App() {
         background: 'var(--bg-secondary)',
         padding: '10px 12px'
       }}>
-        <span style={{ fontWeight: 600, fontSize: 14 }}>Claude Usage</span>
+        <span style={{
+          fontWeight: 600,
+          fontSize: email ? 11 : 14,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          maxWidth: '180px'
+        }}>
+          {headerTitle}
+        </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {lastUpdated && (
             <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
@@ -113,20 +128,12 @@ function App() {
         loading={loading}
       />
 
-      {/* API Costs Section */}
+      {/* Credit Balance Section */}
       <ApiCosts
-        apiData={apiData}
-        configured={adminKeyConfigured}
+        billingInfo={billingInfo}
         loading={loading}
+        onPlatformLogin={handlePlatformLogin}
       />
-
-      {/* Model Breakdown Section */}
-      {apiData?.usageReport && apiData?.costReport && (
-        <ModelBreakdown
-          usageReport={apiData.usageReport}
-          costReport={apiData.costReport}
-        />
-      )}
 
       {/* Footer */}
       <div style={{

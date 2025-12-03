@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, Tray, nativeImage, Menu, screen, dialog } 
 import * as path from 'path';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
-import { scrapeClaudeUsage, openLoginWindow, isAuthenticated } from './scraper';
+import { scrapeClaudeUsage, scrapeBillingInfo, openLoginWindow, openPlatformLoginWindow, isAuthenticated } from './scraper';
 import { getUsageReport, getCostReport, getCreditBalance, ApiData } from './adminApi';
 
 // Disable default error dialogs in production
@@ -164,20 +164,20 @@ async function refreshAllData() {
   if (!mainWindow) return;
 
   try {
-    const [claudeUsage, apiData] = await Promise.all([
+    const [claudeUsage, billingInfo] = await Promise.all([
       scrapeClaudeUsage().catch(err => {
         console.error('Failed to scrape Claude usage:', err);
         return null;
       }),
-      getApiData().catch(err => {
-        console.error('Failed to get API data:', err);
+      scrapeBillingInfo().catch(err => {
+        console.error('Failed to scrape billing info:', err);
         return null;
       }),
     ]);
 
     mainWindow.webContents.send('app:data-updated', {
       claudeUsage,
-      apiData,
+      billingInfo,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
@@ -265,13 +265,8 @@ ipcMain.handle('claude-max:login', async () => {
   return openLoginWindow();
 });
 
-ipcMain.handle('api:get-data', async () => {
-  try {
-    return await getApiData();
-  } catch (error) {
-    console.error('Failed to get API data:', error);
-    return null;
-  }
+ipcMain.handle('platform:login', async () => {
+  return openPlatformLoginWindow();
 });
 
 ipcMain.handle('app:refresh-all', async () => {

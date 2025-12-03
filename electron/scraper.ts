@@ -15,11 +15,22 @@ export interface ClaudeMaxUsage {
   resetDate: string | null;
   lastUpdated: string;
   isAuthenticated: boolean;
+  plan?: string;
+  email?: string;
+}
+
+export interface BillingInfo {
+  creditBalance: number | null;
+  currency: string;
+  lastUpdated: string;
 }
 
 let scraperWindow: BrowserWindow | null = null;
+let billingWindow: BrowserWindow | null = null;
 let loginWindow: BrowserWindow | null = null;
+let platformLoginWindow: BrowserWindow | null = null;
 const CLAUDE_USAGE_URL = 'https://claude.ai/settings/usage';
+const CLAUDE_BILLING_URL = 'https://platform.claude.com/settings/billing';
 const CLAUDE_SESSION_NAME = 'claude-session';
 
 function getSession() {
@@ -131,7 +142,9 @@ export async function scrapeClaudeUsage(): Promise<ClaudeMaxUsage | null> {
               bars: [],
               resetDate: null,
               isAuthenticated: true,
-              rawText: ''
+              rawText: '',
+              plan: null,
+              email: null
             };
 
             // Check if on login page
@@ -261,14 +274,46 @@ export async function scrapeClaudeUsage(): Promise<ClaudeMaxUsage | null> {
               }
             }
 
+            // Try to extract plan name (Max, Pro, Free, etc.)
+            const planPatterns = [
+              /Claude\\s+(Max|Pro|Team|Enterprise|Free)/i,
+              /(Max|Pro|Team|Enterprise)\\s+Plan/i,
+              /Plan:\\s*(Max|Pro|Team|Enterprise|Free)/i
+            ];
+            for (const pattern of planPatterns) {
+              const match = text.match(pattern);
+              if (match) {
+                usage.plan = match[1];
+                break;
+              }
+            }
+            // Fallback: check for plan indicators in the page
+            if (!usage.plan) {
+              if (text.includes('Extra usage') || text.includes('All models')) {
+                usage.plan = 'Max';
+              } else if (text.includes('Pro features')) {
+                usage.plan = 'Pro';
+              }
+            }
+
+            // Try to extract email from the page
+            const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/);
+            if (emailMatch) {
+              usage.email = emailMatch[0];
+            }
+
             return JSON.stringify(usage);
           })();
         `);
 
         if (resolved) return;
 
+        console.log('Usage scrape raw result:', result ? 'got data' : 'no data');
+
         if (result) {
           const parsed = JSON.parse(result);
+          console.log('Parsed usage data - bars:', parsed.bars?.length, 'auth:', parsed.isAuthenticated);
+
           resolved = true;
           clearTimeout(timeout);
 
@@ -297,6 +342,8 @@ export async function scrapeClaudeUsage(): Promise<ClaudeMaxUsage | null> {
             resetDate: parsed.resetDate,
             lastUpdated: new Date().toISOString(),
             isAuthenticated: parsed.isAuthenticated,
+            plan: parsed.plan || undefined,
+            email: parsed.email || undefined,
           });
         }
       } catch (error) {
@@ -357,5 +404,210 @@ export function openLoginWindow(): Promise<boolean> {
     });
 
     loginWindow.loadURL('https://claude.ai/login');
+  });
+}
+
+export async function scrapeBillingInfo(): Promise<BillingInfo | null> {
+  console.log('Starting billing info scrape...');
+
+  return new Promise((resolve) => {
+    if (billingWindow && !billingWindow.isDestroyed()) {
+      billingWindow.close();
+    }
+
+    billingWindow = new BrowserWindow({
+      width: 1000,
+      height: 800,
+      show: false, // Set to true to debug
+      webPreferences: {
+        session: getSession(),
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
+    });
+
+    let resolved = false;
+
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        console.log('Billing scraper timeout reached');
+        resolved = true;
+        if (billingWindow && !billingWindow.isDestroyed()) {
+          billingWindow.close();
+        }
+        billingWindow = null;
+        resolve(null);
+      }
+    }, 30000);
+
+    billingWindow.webContents.on('did-finish-load', async () => {
+      if (resolved) return;
+      if (!billingWindow || billingWindow.isDestroyed()) return;
+
+      const currentUrl = billingWindow.webContents.getURL() || '';
+      console.log('Billing page loaded:', currentUrl);
+
+      // If redirected to login, user needs to authenticate
+      if (currentUrl.includes('/login') || currentUrl.includes('/signup')) {
+        console.log('Platform requires login');
+        resolved = true;
+        clearTimeout(timeout);
+        if (billingWindow && !billingWindow.isDestroyed()) {
+          billingWindow.close();
+        }
+        billingWindow = null;
+        resolve(null);
+        return;
+      }
+
+      // Wait for JavaScript to render
+      await new Promise(r => setTimeout(r, 3000));
+
+      if (resolved || !billingWindow || billingWindow.isDestroyed()) return;
+
+      try {
+        const result = await billingWindow.webContents.executeJavaScript(`
+          (function() {
+            const billing = {
+              creditBalance: null,
+              currency: 'USD',
+              needsLogin: false
+            };
+
+            const text = document.body.innerText;
+
+            // Check if this is a login page
+            if (text.includes('Sign in or create a developer account') ||
+                text.includes('Continue with Google') && text.includes('Continue with email')) {
+              billing.needsLogin = true;
+              return JSON.stringify(billing);
+            }
+
+            // Look for credit balance patterns
+            // Common formats: "$X.XX", "US$X.XX", "$X.XX remaining", "Credit balance: $X.XX"
+            const balancePatterns = [
+              /(?:Credit\\s*balance|Balance|Remaining)[:\\s]*\\$?([\\d,]+\\.\\d{2})/i,
+              /\\$([\\d,]+\\.\\d{2})\\s*(?:remaining|credit|balance)/i,
+              /US\\$([\\d,]+\\.\\d{2})/,
+              /\\$([\\d,]+\\.\\d{2})/
+            ];
+
+            for (const pattern of balancePatterns) {
+              const match = text.match(pattern);
+              if (match) {
+                billing.creditBalance = parseFloat(match[1].replace(/,/g, ''));
+                break;
+              }
+            }
+
+            return JSON.stringify(billing);
+          })();
+        `);
+
+        if (resolved) return;
+
+        if (result) {
+          const parsed = JSON.parse(result);
+          resolved = true;
+          clearTimeout(timeout);
+
+          if (billingWindow && !billingWindow.isDestroyed()) {
+            billingWindow.close();
+          }
+          billingWindow = null;
+
+          // If needs login, return null
+          if (parsed.needsLogin) {
+            console.log('Platform billing requires login');
+            resolve(null);
+            return;
+          }
+
+          console.log('Billing scrape result:', parsed);
+
+          resolve({
+            creditBalance: parsed.creditBalance,
+            currency: parsed.currency || 'USD',
+            lastUpdated: new Date().toISOString(),
+          });
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (!errorMessage.includes('EPIPE')) {
+          console.error('Billing scraping error:', error);
+        }
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeout);
+          if (billingWindow && !billingWindow.isDestroyed()) {
+            billingWindow.close();
+          }
+          billingWindow = null;
+          resolve(null);
+        }
+      }
+    });
+
+    billingWindow.loadURL(CLAUDE_BILLING_URL);
+  });
+}
+
+export function openPlatformLoginWindow(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (platformLoginWindow && !platformLoginWindow.isDestroyed()) {
+      platformLoginWindow.focus();
+      resolve(false);
+      return;
+    }
+
+    platformLoginWindow = new BrowserWindow({
+      width: 600,
+      height: 750,
+      title: 'Login to Claude Platform',
+      webPreferences: {
+        session: getSession(),
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
+    });
+
+    let hasLoggedIn = false;
+
+    platformLoginWindow.on('closed', () => {
+      platformLoginWindow = null;
+      resolve(hasLoggedIn);
+    });
+
+    // Only auto-close when user reaches the billing page after login
+    platformLoginWindow.webContents.on('did-finish-load', async () => {
+      if (!platformLoginWindow || platformLoginWindow.isDestroyed()) return;
+
+      const url = platformLoginWindow.webContents.getURL();
+      console.log('Platform login page:', url);
+
+      // Check if we're on the billing page (not login page)
+      if (url.includes('platform.claude.com/settings/billing')) {
+        // Wait for page to render and check if it's the actual billing page (not login)
+        await new Promise(r => setTimeout(r, 2000));
+
+        if (!platformLoginWindow || platformLoginWindow.isDestroyed()) return;
+
+        const isLoginPage = await platformLoginWindow.webContents.executeJavaScript(`
+          document.body.innerText.includes('Sign in or create a developer account') ||
+          document.body.innerText.includes('Continue with Google')
+        `);
+
+        if (!isLoginPage) {
+          // User is logged in and on billing page
+          hasLoggedIn = true;
+          console.log('Platform login successful, closing window...');
+          setTimeout(() => {
+            platformLoginWindow?.close();
+          }, 1500);
+        }
+      }
+    });
+
+    platformLoginWindow.loadURL('https://platform.claude.com/settings/billing');
   });
 }
