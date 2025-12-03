@@ -178,18 +178,22 @@ export async function scrapeClaudeUsage(): Promise<ClaudeMaxUsage | null> {
 
             const lines = text.split('\\n').map(l => l.trim()).filter(l => l);
 
-            // Define the section labels we're looking for
+            // Define the section labels we're looking for (English and Korean)
             const sectionLabels = [
               'Current session',
               'All models',
               'Sonnet only',
+              'Sonnet만',
               'Extra usage',
               'Weekly limit',
               'Weekly limits',
               'Daily limit',
               'Monthly limit',
               'Standard',
-              'Advanced'
+              'Advanced',
+              '주간 한도',
+              '일일 한도',
+              '월간 한도'
             ];
 
             for (let i = 0; i < lines.length; i++) {
@@ -248,56 +252,63 @@ export async function scrapeClaudeUsage(): Promise<ClaudeMaxUsage | null> {
               }
             }
 
-            // Fallback: if no bars found, try to find percentages with better patterns
+            // Fallback: if no bars found, try to find percentages with better label detection
             if (usage.bars.length === 0) {
-              // Try multiple patterns
-              const patterns = [
-                /(\\d+)\\s*%\\s*used/gi,
-                /(\\d+)%/g
-              ];
-              
               const defaultLabels = ['Current Session', 'All models', 'Sonnet only', 'Extra usage'];
-              let idx = 0;
               const foundPercentages = new Set();
-
-              for (const pattern of patterns) {
-                const percentMatches = text.matchAll(pattern);
+              
+              // Find all percentage matches with their positions
+              const percentMatches = [];
+              const regex = /(\\d+)%/g;
+              let match;
+              while ((match = regex.exec(text)) !== null) {
+                const pct = parseInt(match[1], 10);
+                if (pct >= 0 && pct <= 100 && !foundPercentages.has(pct)) {
+                  percentMatches.push({
+                    percentage: pct,
+                    index: match.index
+                  });
+                  foundPercentages.add(pct);
+                }
+              }
+              
+              // For each percentage, find the closest label before it
+              for (let i = 0; i < Math.min(percentMatches.length, 4); i++) {
+                const pctMatch = percentMatches[i];
+                const beforeText = text.substring(Math.max(0, pctMatch.index - 200), pctMatch.index);
+                const afterText = text.substring(pctMatch.index, Math.min(text.length, pctMatch.index + 100));
                 
-                for (const match of percentMatches) {
-                  const pct = parseInt(match[1], 10);
-                  if (pct >= 0 && pct <= 100 && !foundPercentages.has(pct)) {
-                    foundPercentages.add(pct);
-                    
-                    const matchIndex = match.index || 0;
-                    const contextStart = Math.max(0, matchIndex - 150);
-                    const contextEnd = Math.min(text.length, matchIndex + 50);
-                    const context = text.substring(contextStart, contextEnd);
-
-                    const resetMatch = context.match(/Resets?[^\\n]*/i);
-                    
-                    // Try to find label before the percentage
-                    let label = defaultLabels[idx] || 'Usage ' + (idx + 1);
-                    for (const labelOption of sectionLabels) {
-                      if (context.toLowerCase().includes(labelOption.toLowerCase())) {
-                        label = labelOption;
-                        break;
-                      }
+                // Find the closest section label before this percentage
+                let label = defaultLabels[i] || 'Usage ' + (i + 1);
+                let closestDistance = Infinity;
+                
+                for (const labelOption of sectionLabels) {
+                  const labelIndex = beforeText.toLowerCase().lastIndexOf(labelOption.toLowerCase());
+                  if (labelIndex !== -1) {
+                    const distance = beforeText.length - labelIndex;
+                    if (distance < closestDistance) {
+                      closestDistance = distance;
+                      label = labelOption;
                     }
-
-                    usage.bars.push({
-                      value: pct,
-                      max: 100,
-                      label: label,
-                      resetInfo: resetMatch ? resetMatch[0].trim() : '',
-                      percentage: pct
-                    });
-                    idx++;
-                    
-                    if (idx >= 4) break; // Limit to 4 bars
                   }
                 }
                 
-                if (usage.bars.length > 0) break; // Found some, stop trying other patterns
+                // Normalize Korean labels to English
+                if (label === 'Sonnet만') label = 'Sonnet only';
+                if (label === '주간 한도') label = 'Weekly limit';
+                if (label === '일일 한도') label = 'Daily limit';
+                if (label === '월간 한도') label = 'Monthly limit';
+                
+                // Find reset info (Korean or English)
+                const resetMatch = (beforeText + afterText).match(/(?:Resets?|재설정)[^\\n]*/i);
+                
+                usage.bars.push({
+                  value: pctMatch.percentage,
+                  max: 100,
+                  label: label,
+                  resetInfo: resetMatch ? resetMatch[0].trim() : '',
+                  percentage: pctMatch.percentage
+                });
               }
             }
 
