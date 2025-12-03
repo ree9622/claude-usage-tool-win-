@@ -1,3 +1,4 @@
+import { useLanguage } from '../i18n/LanguageContext';
 import type { ClaudeMaxUsage as ClaudeMaxUsageType, UsageBar as UsageBarType } from '../types';
 
 interface Props {
@@ -66,6 +67,17 @@ function UsageBarComponent({
 }
 
 export function ClaudeMaxUsage({ usage, onLogin, loading }: Props) {
+  const { t } = useLanguage();
+  
+  // Show loading first if we don't have data yet
+  if (loading && !usage) {
+    return (
+      <div className="section">
+        <div className="loading">{t.loading}</div>
+      </div>
+    );
+  }
+  
   if (!usage?.isAuthenticated) {
     return (
       <div className="section">
@@ -74,20 +86,12 @@ export function ClaudeMaxUsage({ usage, onLogin, loading }: Props) {
           padding: '12px 0'
         }}>
           <p style={{ color: 'var(--text-secondary)', marginBottom: 12, fontSize: 12 }}>
-            Login to Claude to see your subscription usage
+            {t.loginToClaudePrompt}
           </p>
           <button className="btn btn-primary" onClick={onLogin}>
-            Login to Claude
+            {t.loginToClaudeButton}
           </button>
         </div>
-      </div>
-    );
-  }
-
-  if (loading && !usage) {
-    return (
-      <div className="section">
-        <div className="loading">Loading...</div>
       </div>
     );
   }
@@ -118,7 +122,7 @@ export function ClaudeMaxUsage({ usage, onLogin, loading }: Props) {
     <div className="section" style={{ paddingTop: 8 }}>
       {bars.length === 0 ? (
         <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: '8px 0' }}>
-          No usage data available
+          {t.noUsageData}
         </div>
       ) : (
         bars.map((bar, index) => (

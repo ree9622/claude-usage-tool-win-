@@ -23,6 +23,11 @@ export interface RefreshData {
   timestamp: string;
 }
 
+export interface AppSettings {
+  refreshInterval: number;
+  autoStart: boolean;
+}
+
 export interface ElectronAPI {
   getClaudeMaxUsage: () => Promise<ClaudeMaxUsage | null>;
   isClaudeAuthenticated: () => Promise<boolean>;
@@ -30,6 +35,9 @@ export interface ElectronAPI {
   openPlatformLogin: () => Promise<boolean>;
   refreshAll: () => Promise<void>;
   onDataRefresh: (callback: (data: RefreshData) => void) => () => void;
+  getSettings: () => Promise<AppSettings>;
+  saveSettings: (settings: AppSettings) => Promise<void>;
+  setAutoStart: (enabled: boolean) => Promise<void>;
 }
 
 const electronAPI: ElectronAPI = {
@@ -45,6 +53,9 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.removeListener('app:data-updated', listener);
     };
   },
+  getSettings: () => ipcRenderer.invoke('app:get-settings'),
+  saveSettings: (settings: AppSettings) => ipcRenderer.invoke('app:save-settings', settings),
+  setAutoStart: (enabled: boolean) => ipcRenderer.invoke('app:set-auto-start', enabled),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

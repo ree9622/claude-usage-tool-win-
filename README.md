@@ -1,7 +1,8 @@
 # Claude Usage Tool
 
-A lightweight macOS menu bar application that displays your Claude Pro/Max subscription usage and API credit balance at a glance.
+A lightweight system tray application that displays your Claude Pro/Max subscription usage and API credit balance at a glance.
 
+![Windows](https://img.shields.io/badge/platform-Windows-blue)
 ![macOS](https://img.shields.io/badge/platform-macOS-lightgrey)
 ![Electron](https://img.shields.io/badge/electron-28.1.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -18,7 +19,7 @@ If you're a Claude power user, you've probably found yourself:
 - Opening multiple browser tabs to check subscription usage and API credits
 - Getting surprised by hitting rate limits mid-conversation
 
-**Claude Usage Tool** solves this by putting your usage stats in your menu bar, always one click away.
+**Claude Usage Tool** solves this by putting your usage stats in your system tray (Windows) or menu bar (macOS), always one click away.
 
 ## Features
 
@@ -26,7 +27,7 @@ If you're a Claude power user, you've probably found yourself:
 - **API Credit Balance** - View your remaining Claude API credits from platform.claude.com
 - **Auto-Refresh** - Data updates every 60 seconds automatically
 - **Activity Log** - Track when data was last fetched and monitor background operations
-- **Menu Bar App** - Lives in your system tray, doesn't clutter your dock
+- **System Tray App** - Lives in your system tray (Windows) or menu bar (macOS), doesn't clutter your taskbar/dock
 
 ## Demo
 
@@ -42,7 +43,7 @@ If you're a Claude power user, you've probably found yourself:
 
 ### Prerequisites
 
-- macOS 12.0 or later
+- Windows 10/11 or macOS 12.0 or later
 - Node.js 18+ and npm
 
 ### Quick Start
@@ -65,15 +66,18 @@ npm run electron:dev
 # Build the application
 npm run build
 
-# Create distributable .dmg
+# Create distributable for Windows (.exe installer)
 npm run electron:build
+
+# Or for macOS (.dmg)
+npm run electron:build:mac
 ```
 
 The built application will be in the `release/` directory.
 
 ## Usage
 
-1. **Launch the app** - It appears as an icon in your menu bar
+1. **Launch the app** - It appears as an icon in your system tray (Windows notification area) or menu bar (macOS)
 2. **Click the icon** - A popover displays your current usage stats
 3. **Login when prompted** - The app will ask you to authenticate with Claude if needed
 4. **View your stats** - Usage bars show percentage consumed and reset timers
@@ -167,9 +171,11 @@ Your session may have expired. Click the Login button to re-authenticate.
 2. Click the refresh button (↻) to manually trigger a refresh
 3. Ensure you have an active internet connection
 
-### App not appearing in menu bar
+### App not appearing in system tray
 
-The app runs as a menu bar app only (no dock icon). Look for the Claude icon in your system tray.
+The app runs as a system tray app only (no taskbar/dock icon). Look for the Claude icon in your:
+- **Windows**: System tray (notification area, bottom-right corner)
+- **macOS**: Menu bar (top-right corner)
 
 ## Contributing
 

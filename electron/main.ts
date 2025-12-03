@@ -2,8 +2,22 @@ import { app, BrowserWindow, ipcMain, Tray, nativeImage, Menu, screen, dialog } 
 import * as path from 'path';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
+import Store from 'electron-store';
 import { scrapeClaudeUsage, scrapeBillingInfo, openLoginWindow, openPlatformLoginWindow, isAuthenticated } from './scraper';
 import { getUsageReport, getCostReport, getCreditBalance, ApiData } from './adminApi';
+
+// Settings store
+interface AppSettings {
+  refreshInterval: number;
+  autoStart: boolean;
+}
+
+const store = new Store<AppSettings>({
+  defaults: {
+    refreshInterval: 60,
+    autoStart: false,
+  },
+});
 
 // Disable default error dialogs in production
 if (app.isPackaged) {
@@ -88,7 +102,7 @@ function createWindow() {
     frame: false,
     resizable: false,
     skipTaskbar: true,
-    transparent: true,
+    transparent: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -107,9 +121,8 @@ function createWindow() {
     mainWindow.loadFile(htmlPath);
   }
 
-  mainWindow.on('blur', () => {
-    mainWindow?.hide();
-  });
+  // Don't use blur event - it interferes with toggle
+  // User can click tray icon again to close, or click outside will be handled by OS
 }
 
 function createTray() {
@@ -212,7 +225,10 @@ function createTray() {
   ]);
 
   tray.on('click', () => {
-    if (mainWindow?.isVisible()) {
+    if (!mainWindow) return;
+    
+    // Immediate toggle: if visible, hide it; if hidden, show it
+    if (mainWindow.isVisible()) {
       mainWindow.hide();
     } else {
       showWindow();
@@ -225,22 +241,28 @@ function createTray() {
 }
 
 function showWindow() {
-  if (!mainWindow || !tray) {
-    console.log('showWindow: mainWindow or tray is null');
-    return;
-  }
+  if (!mainWindow || !tray) return;
 
   const trayBounds = tray.getBounds();
   const windowBounds = mainWindow.getBounds();
   const display = screen.getDisplayNearestPoint({ x: trayBounds.x, y: trayBounds.y });
 
-  console.log('Tray bounds:', trayBounds);
-  console.log('Window bounds:', windowBounds);
-  console.log('Display bounds:', display.bounds);
+  let x: number, y: number;
 
-  // Position window below tray icon (macOS style)
-  let x = Math.round(trayBounds.x + trayBounds.width / 2 - windowBounds.width / 2);
-  let y = Math.round(trayBounds.y + trayBounds.height + 4);
+  if (process.platform === 'win32') {
+    // Windows: Position above tray icon (taskbar is usually at bottom)
+    x = Math.round(trayBounds.x + trayBounds.width / 2 - windowBounds.width / 2);
+    y = Math.round(trayBounds.y - windowBounds.height - 4);
+    
+    // If taskbar is at top, position below
+    if (trayBounds.y < display.bounds.height / 2) {
+      y = Math.round(trayBounds.y + trayBounds.height + 4);
+    }
+  } else {
+    // macOS: Position below tray icon
+    x = Math.round(trayBounds.x + trayBounds.width / 2 - windowBounds.width / 2);
+    y = Math.round(trayBounds.y + trayBounds.height + 4);
+  }
 
   // Ensure window is within display bounds
   if (x + windowBounds.width > display.bounds.x + display.bounds.width) {
@@ -249,10 +271,15 @@ function showWindow() {
   if (x < display.bounds.x) {
     x = display.bounds.x;
   }
+  if (y + windowBounds.height > display.bounds.y + display.bounds.height) {
+    y = display.bounds.y + display.bounds.height - windowBounds.height;
+  }
+  if (y < display.bounds.y) {
+    y = display.bounds.y;
+  }
 
   mainWindow.setPosition(x, y, false);
   mainWindow.show();
-  mainWindow.focus();
 }
 
 async function refreshAllData() {
@@ -362,8 +389,17 @@ async function getApiData(): Promise<ApiData | null> {
 }
 
 function startAutoRefresh() {
-  // Refresh every 60 seconds
-  refreshInterval = setInterval(refreshAllData, 60000);
+  // Clear existing interval if any
+  if (refreshInterval) {
+    clearInterval(refreshInterval);
+  }
+  
+  // Get refresh interval from settings (in seconds)
+  const intervalSeconds = store.get('refreshInterval', 60);
+  const intervalMs = intervalSeconds * 1000;
+  
+  // Refresh at specified interval
+  refreshInterval = setInterval(refreshAllData, intervalMs);
   // Initial refresh
   refreshAllData();
 }
@@ -402,6 +438,35 @@ ipcMain.handle('app:get-admin-key-status', () => {
   };
 });
 
+ipcMain.handle('app:get-settings', () => {
+  return {
+    refreshInterval: store.get('refreshInterval', 60),
+    autoStart: store.get('autoStart', false),
+  };
+});
+
+ipcMain.handle('app:save-settings', async (_event, settings: AppSettings) => {
+  store.set('refreshInterval', settings.refreshInterval);
+  store.set('autoStart', settings.autoStart);
+  
+  // Restart auto-refresh with new interval
+  startAutoRefresh();
+  
+  // Update auto-start setting
+  app.setLoginItemSettings({
+    openAtLogin: settings.autoStart,
+    path: app.getPath('exe'),
+  });
+});
+
+ipcMain.handle('app:set-auto-start', async (_event, enabled: boolean) => {
+  store.set('autoStart', enabled);
+  app.setLoginItemSettings({
+    openAtLogin: enabled,
+    path: app.getPath('exe'),
+  });
+});
+
 // App lifecycle
 app.whenReady().then(() => {
   createWindow();
@@ -430,4 +495,9 @@ app.on('before-quit', () => {
 // Hide dock icon on macOS (menu bar app)
 if (process.platform === 'darwin') {
   app.dock?.hide();
+}
+
+// On Windows, prevent app from showing in taskbar
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.claude-usage-tool');
 }

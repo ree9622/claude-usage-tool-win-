@@ -204,9 +204,10 @@ export async function scrapeClaudeUsage(): Promise<ClaudeMaxUsage | null> {
                 const label = line;
                 let percentage = 0;
                 let resetInfo = '';
+                let foundPercentage = false;
 
                 // Look at next few lines for reset info and percentage
-                for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
+                for (let j = i + 1; j < Math.min(i + 8, lines.length); j++) {
                   const nextLine = lines[j];
 
                   // Look for "Resets ..." pattern
@@ -218,12 +219,21 @@ export async function scrapeClaudeUsage(): Promise<ClaudeMaxUsage | null> {
                   const pctMatch = nextLine.match(/(\\d+)%\\s*used/i);
                   if (pctMatch) {
                     percentage = parseInt(pctMatch[1], 10);
-                    break; // Found the percentage, stop looking
+                    foundPercentage = true;
+                    break;
+                  }
+                  
+                  // Also look for just "X%" pattern
+                  const pctOnlyMatch = nextLine.match(/^(\\d+)%$/);
+                  if (pctOnlyMatch) {
+                    percentage = parseInt(pctOnlyMatch[1], 10);
+                    foundPercentage = true;
+                    break;
                   }
                 }
 
                 // Only add if we found meaningful data
-                if (percentage >= 0 || resetInfo) {
+                if (foundPercentage || resetInfo) {
                   // Skip "Weekly limits" header if we have individual models
                   if (line.toLowerCase() === 'weekly limits') continue;
 
@@ -238,34 +248,56 @@ export async function scrapeClaudeUsage(): Promise<ClaudeMaxUsage | null> {
               }
             }
 
-            // Fallback: if no bars found, try to find percentages
+            // Fallback: if no bars found, try to find percentages with better patterns
             if (usage.bars.length === 0) {
-              const percentMatches = text.matchAll(/(\\d+)\\s*%\\s*used/gi);
-              let idx = 0;
+              // Try multiple patterns
+              const patterns = [
+                /(\\d+)\\s*%\\s*used/gi,
+                /(\\d+)%/g
+              ];
+              
               const defaultLabels = ['Current Session', 'All models', 'Sonnet only', 'Extra usage'];
+              let idx = 0;
+              const foundPercentages = new Set();
 
-              for (const match of percentMatches) {
-                const pct = parseInt(match[1], 10);
-                if (pct >= 0 && pct <= 100) {
-                  const exists = usage.bars.some(b => Math.abs(b.percentage - pct) < 1);
-                  if (!exists) {
+              for (const pattern of patterns) {
+                const percentMatches = text.matchAll(pattern);
+                
+                for (const match of percentMatches) {
+                  const pct = parseInt(match[1], 10);
+                  if (pct >= 0 && pct <= 100 && !foundPercentages.has(pct)) {
+                    foundPercentages.add(pct);
+                    
                     const matchIndex = match.index || 0;
-                    const contextStart = Math.max(0, matchIndex - 100);
-                    const contextEnd = Math.min(text.length, matchIndex + 100);
+                    const contextStart = Math.max(0, matchIndex - 150);
+                    const contextEnd = Math.min(text.length, matchIndex + 50);
                     const context = text.substring(contextStart, contextEnd);
 
                     const resetMatch = context.match(/Resets?[^\\n]*/i);
+                    
+                    // Try to find label before the percentage
+                    let label = defaultLabels[idx] || 'Usage ' + (idx + 1);
+                    for (const labelOption of sectionLabels) {
+                      if (context.toLowerCase().includes(labelOption.toLowerCase())) {
+                        label = labelOption;
+                        break;
+                      }
+                    }
 
                     usage.bars.push({
                       value: pct,
                       max: 100,
-                      label: defaultLabels[idx] || 'Usage ' + (idx + 1),
+                      label: label,
                       resetInfo: resetMatch ? resetMatch[0].trim() : '',
                       percentage: pct
                     });
                     idx++;
+                    
+                    if (idx >= 4) break; // Limit to 4 bars
                   }
                 }
+                
+                if (usage.bars.length > 0) break; // Found some, stop trying other patterns
               }
             }
 
@@ -324,6 +356,13 @@ export async function scrapeClaudeUsage(): Promise<ClaudeMaxUsage | null> {
         if (result) {
           const parsed = JSON.parse(result);
           console.log('Parsed usage data - bars:', parsed.bars?.length, 'auth:', parsed.isAuthenticated);
+          
+          // Log each bar for debugging
+          if (parsed.bars) {
+            parsed.bars.forEach((bar: any, idx: number) => {
+              console.log(`  Bar ${idx}: ${bar.label} - ${bar.percentage}% (${bar.value}/${bar.max})`);
+            });
+          }
 
           resolved = true;
           isScrapingUsage = false;
@@ -596,52 +635,64 @@ export function openPlatformLoginWindow(): Promise<boolean> {
 
     let hasLoggedIn = false;
     let wasOnLoginPage = false;
+    let checkCount = 0;
 
     platformLoginWindow.on('closed', () => {
       platformLoginWindow = null;
       resolve(hasLoggedIn);
     });
 
-    // Only auto-close when user completes login (transitions from login page to billing page)
-    platformLoginWindow.webContents.on('did-finish-load', async () => {
+    // Check login status periodically
+    const checkLoginStatus = async () => {
       if (!platformLoginWindow || platformLoginWindow.isDestroyed()) return;
 
       const url = platformLoginWindow.webContents.getURL();
-      console.log('Platform login page:', url);
-
+      
       // Check if we're on the billing page
       if (url.includes('platform.claude.com/settings/billing')) {
-        // Wait for page to render
-        await new Promise(r => setTimeout(r, 2000));
+        try {
+          const isLoginPage = await platformLoginWindow.webContents.executeJavaScript(`
+            document.body.innerText.includes('Sign in or create a developer account') ||
+            document.body.innerText.includes('Continue with Google')
+          `);
 
-        if (!platformLoginWindow || platformLoginWindow.isDestroyed()) return;
-
-        const isLoginPage = await platformLoginWindow.webContents.executeJavaScript(`
-          document.body.innerText.includes('Sign in or create a developer account') ||
-          document.body.innerText.includes('Continue with Google')
-        `);
-
-        if (isLoginPage) {
-          // User needs to login - remember this
-          wasOnLoginPage = true;
-          console.log('Platform requires login, window stays open');
-        } else {
-          // User is logged in
-          hasLoggedIn = true;
-
-          // Only auto-close if user just completed login (was on login page before)
-          // If already logged in from start, keep window open so user can close manually
-          if (wasOnLoginPage) {
-            console.log('Platform login completed, closing window...');
+          if (isLoginPage) {
+            wasOnLoginPage = true;
+          } else if (wasOnLoginPage) {
+            // User just logged in!
+            hasLoggedIn = true;
+            console.log('Platform login detected, closing window...');
             setTimeout(() => {
               platformLoginWindow?.close();
-            }, 1500);
+            }, 1000);
+            return;
           } else {
-            console.log('Already logged in to platform, keeping window open');
-            // Don't auto-close - let user close manually or it will close when they navigate away
+            // Already logged in from the start
+            checkCount++;
+            if (checkCount >= 3) {
+              // After 3 checks (6 seconds), assume already logged in
+              hasLoggedIn = true;
+              console.log('Already logged in to platform, closing window...');
+              setTimeout(() => {
+                platformLoginWindow?.close();
+              }, 500);
+              return;
+            }
           }
+        } catch (error) {
+          console.log('Error checking login status:', error);
         }
       }
+
+      // Continue checking
+      if (platformLoginWindow && !platformLoginWindow.isDestroyed()) {
+        setTimeout(checkLoginStatus, 2000);
+      }
+    };
+
+    // Start checking after initial load
+    platformLoginWindow.webContents.on('did-finish-load', () => {
+      setTimeout(checkLoginStatus, 2000);
     });
 
     platformLoginWindow.loadURL('https://platform.claude.com/settings/billing');

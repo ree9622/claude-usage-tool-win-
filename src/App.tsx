@@ -1,17 +1,48 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ClaudeMaxUsage } from './components/ClaudeMaxUsage';
 import { ApiCosts } from './components/ApiCosts';
+import { Settings } from './components/Settings';
+import { useLanguage } from './i18n/LanguageContext';
 import type { ClaudeMaxUsage as ClaudeMaxUsageType, BillingInfo, RefreshData, LogEntry } from './types';
 
 // Check if running inside Electron
 const isElectron = typeof window !== 'undefined' && window.electronAPI !== undefined;
 
 function App() {
-  const [claudeUsage, setClaudeUsage] = useState<ClaudeMaxUsageType | null>(null);
-  const [billingInfo, setBillingInfo] = useState<BillingInfo | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const { language, t } = useLanguage();
+  
+  // Load cached data from localStorage
+  const [claudeUsage, setClaudeUsage] = useState<ClaudeMaxUsageType | null>(() => {
+    try {
+      const cached = localStorage.getItem('claudeUsage');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+  
+  const [billingInfo, setBillingInfo] = useState<BillingInfo | null>(() => {
+    try {
+      const cached = localStorage.getItem('billingInfo');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+  
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(() => {
+    try {
+      const cached = localStorage.getItem('lastUpdated');
+      return cached ? new Date(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+  
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [showSettings, setShowSettings] = useState(false);
+  const [refreshInterval, setRefreshInterval] = useState(60);
 
   const refreshData = useCallback(async () => {
     if (!isElectron) {
@@ -23,8 +54,9 @@ function App() {
       await window.electronAPI.refreshAll();
     } catch (error) {
       console.error('Failed to refresh:', error);
+      setLoading(false);
     }
-    setLoading(false);
+    // Don't set loading to false here - let the data update event do it
   }, []);
 
   useEffect(() => {
@@ -32,6 +64,15 @@ function App() {
       setLoading(false);
       return;
     }
+
+    // Load settings
+    const loadSettings = async () => {
+      if (window.electronAPI?.getSettings) {
+        const settings = await window.electronAPI.getSettings();
+        setRefreshInterval(settings.refreshInterval || 60);
+      }
+    };
+    loadSettings();
 
     // Initial data load
     refreshData();
@@ -45,6 +86,19 @@ function App() {
         setLogs(data.logs);
       }
       setLoading(false);
+      
+      // Cache data to localStorage
+      try {
+        if (data.claudeUsage) {
+          localStorage.setItem('claudeUsage', JSON.stringify(data.claudeUsage));
+        }
+        if (data.billingInfo) {
+          localStorage.setItem('billingInfo', JSON.stringify(data.billingInfo));
+        }
+        localStorage.setItem('lastUpdated', data.timestamp);
+      } catch (error) {
+        console.error('Failed to cache data:', error);
+      }
     });
 
     return () => {
@@ -85,40 +139,55 @@ function App() {
 
   // Build header title - Claude "Plan" Plan Usage
   const planName = claudeUsage?.plan || 'Max';
-  const headerTitle = `Claude "${planName}" Plan Usage`;
+  const headerTitle = language === 'ko' 
+    ? `Claude ${planName} ${t.planUsage}` 
+    : `Claude "${planName}" ${t.planUsage}`;
 
   return (
-    <div className="panel" style={{ width: 320, maxHeight: 480, overflowY: 'auto' }}>
-      {/* Header */}
-      <div className="section" style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        background: 'var(--bg-secondary)',
-        padding: '8px 12px'
-      }}>
-        <span style={{
-          fontWeight: 600,
-          fontSize: 13
+    <>
+      <div className="panel" style={{ width: 320, maxHeight: 480, overflowY: 'auto' }}>
+        {/* Header */}
+        <div className="section" style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          background: 'var(--bg-secondary)',
+          padding: '8px 10px'
         }}>
-          {headerTitle}
-        </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {lastUpdated && (
-            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-              {lastUpdated.toLocaleTimeString()}
-            </span>
-          )}
-          <button
-            className="btn btn-secondary"
-            onClick={refreshData}
-            disabled={loading}
-            style={{ padding: '4px 8px', fontSize: 11 }}
-          >
-            {loading ? '...' : 'Refresh'}
-          </button>
+          <span style={{
+            fontWeight: 600,
+            fontSize: 12,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            flex: 1
+          }}>
+            {headerTitle}
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            {lastUpdated && (
+              <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+                {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+            <button
+              className="btn btn-icon"
+              onClick={() => setShowSettings(true)}
+              title={t.settings}
+              style={{ padding: '3px 5px', fontSize: 13 }}
+            >
+              ⚙️
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={refreshData}
+              disabled={loading}
+              style={{ padding: '4px 8px', fontSize: 10 }}
+            >
+              {loading ? '...' : t.refresh}
+            </button>
+          </div>
         </div>
-      </div>
 
       {/* Claude Max Usage Section */}
       <ClaudeMaxUsage
@@ -142,7 +211,7 @@ function App() {
         borderTop: '1px solid var(--border)'
       }}>
         <div style={{ textAlign: 'center', marginBottom: logs.length > 0 ? 4 : 0 }}>
-          Auto-refreshes every 60s
+          {language === 'ko' ? `${refreshInterval}초마다 갱신` : `Auto-refresh every ${refreshInterval}s`}
         </div>
         {logs.length > 0 && (
           <div style={{
@@ -172,6 +241,9 @@ function App() {
         )}
       </div>
     </div>
+    
+    {showSettings && <Settings onClose={() => setShowSettings(false)} />}
+    </>
   );
 }
 

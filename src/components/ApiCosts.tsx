@@ -1,3 +1,4 @@
+import { useLanguage } from '../i18n/LanguageContext';
 import type { BillingInfo } from '../types';
 
 interface Props {
@@ -7,11 +8,13 @@ interface Props {
 }
 
 export function ApiCosts({ billingInfo, loading, onPlatformLogin }: Props) {
+  const { t } = useLanguage();
+  
   if (loading && !billingInfo) {
     return (
       <div className="section">
-        <div className="section-title">API Credit</div>
-        <div className="loading">Loading...</div>
+        <div className="section-title">{t.apiCredit}</div>
+        <div className="loading">{t.loading}</div>
       </div>
     );
   }
@@ -20,7 +23,7 @@ export function ApiCosts({ billingInfo, loading, onPlatformLogin }: Props) {
   if (!billingInfo || billingInfo.creditBalance === null) {
     return (
       <div className="section" style={{ paddingTop: 8, paddingBottom: 8 }}>
-        <div className="section-title">API Credit</div>
+        <div className="section-title">{t.apiCredit}</div>
         <div style={{
           background: 'var(--bg-tertiary)',
           borderRadius: 10,
@@ -28,10 +31,10 @@ export function ApiCosts({ billingInfo, loading, onPlatformLogin }: Props) {
           textAlign: 'center'
         }}>
           <p style={{ color: 'var(--text-secondary)', marginBottom: 10, fontSize: 11 }}>
-            Login to Claude Platform to see your API credit balance
+            {t.loginToPlatformPrompt}
           </p>
           <button className="btn btn-primary" onClick={onPlatformLogin} style={{ fontSize: 11, padding: '5px 10px' }}>
-            Login to Platform
+            {t.loginToPlatformButton}
           </button>
         </div>
       </div>
@@ -40,7 +43,7 @@ export function ApiCosts({ billingInfo, loading, onPlatformLogin }: Props) {
 
   return (
     <div className="section" style={{ paddingTop: 8, paddingBottom: 8 }}>
-      <div className="section-title">API Credit</div>
+      <div className="section-title">{t.apiCredit}</div>
 
       {/* Credit Balance Card */}
       <div style={{
@@ -62,7 +65,7 @@ export function ApiCosts({ billingInfo, loading, onPlatformLogin }: Props) {
           fontSize: 11,
           color: 'var(--text-muted)'
         }}>
-          Remaining Balance
+          {t.remainingBalance}
         </div>
       </div>
     </div>

@@ -35,6 +35,11 @@ export interface RefreshData {
   logs?: LogEntry[];
 }
 
+export interface AppSettings {
+  refreshInterval: number;
+  autoStart: boolean;
+}
+
 // Window type augmentation for Electron API
 declare global {
   interface Window {
@@ -45,6 +50,9 @@ declare global {
       openPlatformLogin: () => Promise<boolean>;
       refreshAll: () => Promise<void>;
       onDataRefresh: (callback: (data: RefreshData) => void) => () => void;
+      getSettings?: () => Promise<AppSettings>;
+      saveSettings?: (settings: AppSettings) => Promise<void>;
+      setAutoStart?: (enabled: boolean) => Promise<void>;
     };
   }
 }
