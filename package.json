@@ -1,0 +1,47 @@
+{
+  "name": "claude-usage-tool",
+  "version": "1.0.0",
+  "description": "Menu bar app to track Claude Max subscription usage and API costs",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "electron:dev": "concurrently -k \"vite\" \"tsc -p tsconfig.electron.json -w\" \"wait-on tcp:5173 && electron .\"",
+    "electron:build": "npm run build && tsc -p tsconfig.electron.json && electron-builder --mac",
+    "start": "electron .",
+    "lint": "eslint . --ext ts,tsx"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "electron-store": "^8.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^8.2.2",
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.claude-usage-tool",
+    "productName": "Claude Usage Tool",
+    "mac": {
+      "category": "public.app-category.utilities",
+      "icon": "assets/icon.icns"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "assets/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    }
+  }
+}
