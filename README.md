@@ -2,13 +2,14 @@
 
 A lightweight macOS menu bar application that displays your Claude Pro/Max subscription usage and API credit balance at a glance.
 
+![macOS](https://img.shields.io/badge/platform-macOS-lightgrey)
+![Electron](https://img.shields.io/badge/electron-28.1.0-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+
 <p align="center">
   <img src="Claude%20Usage%20Tool%201.png" alt="Claude Usage Tool Screenshot">
 </p>
 
-![macOS](https://img.shields.io/badge/platform-macOS-lightgrey)
-![Electron](https://img.shields.io/badge/electron-28.1.0-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
 
 ## Why This Tool?
 
