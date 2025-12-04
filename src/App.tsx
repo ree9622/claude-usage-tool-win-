@@ -51,7 +51,7 @@ function App() {
     }
     setLoading(true);
     try {
-      await window.electronAPI.refreshAll();
+      await window.electronAPI?.refreshAll();
     } catch (error) {
       console.error('Failed to refresh:', error);
       setLoading(false);
@@ -78,7 +78,7 @@ function App() {
     refreshData();
 
     // Listen for auto-refresh updates
-    const unsubscribe = window.electronAPI.onDataRefresh((data: RefreshData) => {
+    const unsubscribe = window.electronAPI?.onDataRefresh((data: RefreshData) => {
       setClaudeUsage(data.claudeUsage);
       setBillingInfo(data.billingInfo);
       setLastUpdated(new Date(data.timestamp));
@@ -102,13 +102,13 @@ function App() {
     });
 
     return () => {
-      unsubscribe();
+      unsubscribe?.();
     };
   }, [refreshData]);
 
   const handleLogin = async () => {
     if (!isElectron) return;
-    const success = await window.electronAPI.openClaudeLogin();
+    const success = await window.electronAPI?.openClaudeLogin();
     if (success) {
       refreshData();
     }
@@ -116,7 +116,7 @@ function App() {
 
   const handlePlatformLogin = async () => {
     if (!isElectron) return;
-    const success = await window.electronAPI.openPlatformLogin();
+    const success = await window.electronAPI?.openPlatformLogin();
     if (success) {
       refreshData();
     }

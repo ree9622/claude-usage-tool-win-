@@ -41,20 +41,20 @@ export interface AppSettings {
   notificationThreshold: number; // Percentage threshold for notifications (0 = disabled)
 }
 
-// Window type augmentation for Electron API
+// 2025-12-04: Window type augmentation for Electron API - electronAPI를 optional로 수정
 declare global {
   interface Window {
-    electronAPI: {
+    electronAPI?: {
       getClaudeMaxUsage: () => Promise<ClaudeMaxUsage | null>;
       isClaudeAuthenticated: () => Promise<boolean>;
       openClaudeLogin: () => Promise<boolean>;
       openPlatformLogin: () => Promise<boolean>;
       refreshAll: () => Promise<void>;
       onDataRefresh: (callback: (data: RefreshData) => void) => () => void;
-      getSettings?: () => Promise<AppSettings>;
-      saveSettings?: (settings: AppSettings) => Promise<void>;
-      setAutoStart?: (enabled: boolean) => Promise<void>;
-      hideWindow?: () => void;
+      getSettings: () => Promise<AppSettings>;
+      saveSettings: (settings: AppSettings) => Promise<void>;
+      setAutoStart: (enabled: boolean) => Promise<void>;
+      hideWindow: () => void;
     };
   }
 }
