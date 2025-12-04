@@ -9,37 +9,57 @@ This PR adds comprehensive Windows support to Claude Usage Tool, along with inte
 ## ✨ New Features / 새로운 기능
 
 ### 1. Windows Platform Support / Windows 플랫폼 지원
-- ✅ NSIS installer configuration for Windows
+- ✅ Portable executable (single .exe file, 67MB)
 - ✅ Windows-specific tray icon positioning (above taskbar)
 - ✅ Proper window behavior for Windows system tray
 - ✅ Windows 10/11 compatibility
 
-**Windows용 NSIS 인스톨러 설정, 작업 표시줄 위 트레이 아이콘 위치 조정, Windows 10/11 호환성**
+**포터블 실행 파일(단일 .exe, 67MB), 작업 표시줄 위 트레이 아이콘 위치 조정, Windows 10/11 호환성**
 
 ### 2. Multi-language Support (i18n) / 다국어 지원
 - ✅ English and Korean language support
 - ✅ Easy-to-extend translation system
 - ✅ Language switcher in settings
 - ✅ Persistent language preference
+- ✅ Korean locale support in usage parsing
 
-**영어와 한국어 지원, 확장 가능한 번역 시스템, 설정에서 언어 전환, 언어 설정 저장**
+**영어와 한국어 지원, 확장 가능한 번역 시스템, 설정에서 언어 전환, 언어 설정 저장, 사용량 파싱에서 한국어 로케일 지원**
 
 ### 3. User Settings Panel / 사용자 설정 패널
 - ✅ Settings UI with gear icon in header
 - ✅ Configurable refresh interval (10-600 seconds)
 - ✅ Auto-start on system boot toggle
 - ✅ Language selection
+- ✅ Usage alert notification threshold (0-100%)
 - ✅ Settings persistence using electron-store
 
-**헤더의 설정 아이콘, 새로고침 간격 설정(10-600초), 부팅 시 자동 시작 토글, 언어 선택, electron-store를 사용한 설정 저장**
+**헤더의 설정 아이콘, 새로고침 간격 설정(10-600초), 부팅 시 자동 시작 토글, 언어 선택, 사용량 알림 임계값 설정, electron-store를 사용한 설정 저장**
 
-### 4. Performance Improvements / 성능 개선
+### 4. Notification System / 알림 시스템
+- ✅ Windows notifications when usage exceeds threshold
+- ✅ Per-bar notifications (Current session, All models, Sonnet only)
+- ✅ Configurable threshold (default 80%)
+- ✅ Smart notification reset when usage drops
+
+**사용량이 임계값을 초과하면 Windows 알림, 각 항목별 개별 알림, 설정 가능한 임계값(기본 80%), 사용량 감소 시 스마트 알림 재설정**
+
+### 5. Enhanced UX / 향상된 사용자 경험
+- ✅ Close button (×) in main window header
+- ✅ Logout functionality for Claude and Platform
+- ✅ Dynamic tray menu based on login status
 - ✅ Data caching in localStorage for instant loading
 - ✅ Background data refresh while showing cached data
-- ✅ Improved scraper with better percentage detection
-- ✅ Enhanced platform login detection
+- ✅ Improved window toggle behavior
 
-**즉시 로딩을 위한 localStorage 데이터 캐싱, 캐시된 데이터를 보여주면서 백그라운드 새로고침, 개선된 퍼센트 감지, 향상된 Platform 로그인 감지**
+**메인 창 헤더에 닫기 버튼, Claude 및 Platform 로그아웃 기능, 로그인 상태에 따른 동적 트레이 메뉴, 즉시 로딩을 위한 데이터 캐싱, 개선된 창 토글 동작**
+
+### 6. Better Data Parsing / 향상된 데이터 파싱
+- ✅ Korean reset info parsing ("4시간 후 재설정", "(토) 오후 3:59에 재설정")
+- ✅ Accurate label detection for each usage bar
+- ✅ Support for Korean labels (Sonnet만, 주간 한도, etc.)
+- ✅ Improved percentage detection
+
+**한국어 리셋 정보 파싱, 각 사용량 바의 정확한 라벨 감지, 한국어 라벨 지원, 개선된 퍼센트 감지**
 
 ## 🔧 Technical Changes / 기술적 변경사항
 
