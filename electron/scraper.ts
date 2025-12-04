@@ -54,6 +54,43 @@ export async function isAuthenticated(): Promise<boolean> {
   return hasSession;
 }
 
+export async function isPlatformAuthenticated(): Promise<boolean> {
+  const ses = getSession();
+  const cookies = await ses.cookies.get({ domain: '.anthropic.com' });
+  const platformCookies = await ses.cookies.get({ domain: '.platform.claude.com' });
+  const allCookies = [...cookies, ...platformCookies];
+  
+  const hasSession = allCookies.some(c =>
+    c.name.includes('session') ||
+    c.name.includes('auth') ||
+    c.name.includes('token')
+  );
+  console.log('Platform auth check - has session:', hasSession);
+  return hasSession;
+}
+
+export async function logout(): Promise<void> {
+  const ses = getSession();
+  
+  // Clear all cookies for claude.ai and platform.claude.com
+  const domains = ['.claude.ai', 'claude.ai', '.anthropic.com', 'anthropic.com', '.platform.claude.com', 'platform.claude.com'];
+  
+  for (const domain of domains) {
+    const cookies = await ses.cookies.get({ domain });
+    for (const cookie of cookies) {
+      await ses.cookies.remove(`https://${domain}`, cookie.name);
+    }
+  }
+  
+  // Clear cache and storage
+  await ses.clearCache();
+  await ses.clearStorageData({
+    storages: ['cookies', 'localstorage']
+  });
+  
+  console.log('Logged out - all sessions cleared');
+}
+
 export async function scrapeClaudeUsage(): Promise<ClaudeMaxUsage | null> {
   // Prevent concurrent scrapes
   if (isScrapingUsage) {
@@ -275,8 +312,8 @@ export async function scrapeClaudeUsage(): Promise<ClaudeMaxUsage | null> {
               // For each percentage, find the closest label before it
               for (let i = 0; i < Math.min(percentMatches.length, 4); i++) {
                 const pctMatch = percentMatches[i];
-                const beforeText = text.substring(Math.max(0, pctMatch.index - 200), pctMatch.index);
-                const afterText = text.substring(pctMatch.index, Math.min(text.length, pctMatch.index + 100));
+                const beforeText = text.substring(Math.max(0, pctMatch.index - 150), pctMatch.index);
+                const afterText = text.substring(pctMatch.index, Math.min(text.length, pctMatch.index + 50));
                 
                 // Find the closest section label before this percentage
                 let label = defaultLabels[i] || 'Usage ' + (i + 1);
@@ -299,14 +336,28 @@ export async function scrapeClaudeUsage(): Promise<ClaudeMaxUsage | null> {
                 if (label === '일일 한도') label = 'Daily limit';
                 if (label === '월간 한도') label = 'Monthly limit';
                 
-                // Find reset info (Korean or English)
-                const resetMatch = (beforeText + afterText).match(/(?:Resets?|재설정)[^\\n]*/i);
+                // Find reset info (Korean or English) - search only in beforeText for better accuracy
+                // Korean patterns: "4시간 18분 후 재설정", "(토) 오후 4:00에 재설정"
+                // English patterns: "Resets in 4 hr 18 min", "Resets Sat 4:00 PM"
+                let resetInfo = '';
+                
+                // Search in beforeText first (more accurate for the current item)
+                const koreanResetMatch = beforeText.match(/[^\\n]*(?:후|에)\\s*재설정/gi);
+                const englishResetMatch = beforeText.match(/Resets?[^\\n]*/gi);
+                
+                // Get the last match (closest to the percentage)
+                if (koreanResetMatch && koreanResetMatch.length > 0) {
+                  resetInfo = koreanResetMatch[koreanResetMatch.length - 1].trim();
+                } else if (englishResetMatch && englishResetMatch.length > 0) {
+                  resetInfo = englishResetMatch[englishResetMatch.length - 1].trim();
+                }
                 
                 usage.bars.push({
                   value: pctMatch.percentage,
                   max: 100,
                   label: label,
-                  resetInfo: resetMatch ? resetMatch[0].trim() : '',
+                  resetInfo: resetInfo,
+                  context: resetInfo,  // Also set context for UI display
                   percentage: pctMatch.percentage
                 });
               }

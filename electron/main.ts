@@ -3,19 +3,21 @@ import * as path from 'path';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import Store from 'electron-store';
-import { scrapeClaudeUsage, scrapeBillingInfo, openLoginWindow, openPlatformLoginWindow, isAuthenticated } from './scraper';
+import { scrapeClaudeUsage, scrapeBillingInfo, openLoginWindow, openPlatformLoginWindow, isAuthenticated, isPlatformAuthenticated, logout } from './scraper';
 import { getUsageReport, getCostReport, getCreditBalance, ApiData } from './adminApi';
 
 // Settings store
 interface AppSettings {
   refreshInterval: number;
   autoStart: boolean;
+  notificationThreshold: number;
 }
 
 const store = new Store<AppSettings>({
   defaults: {
     refreshInterval: 60,
     autoStart: false,
+    notificationThreshold: 80, // Default: notify at 80%
   },
 });
 
@@ -67,6 +69,8 @@ console.log('Admin key configured:', !!process.env.ANTHROPIC_ADMIN_KEY);
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let refreshInterval: NodeJS.Timeout | null = null;
+let lastClickTime = 0;
+const CLICK_DEBOUNCE = 200; // 200ms debounce
 
 const isDev = !app.isPackaged;
 
@@ -121,45 +125,46 @@ function createWindow() {
     mainWindow.loadFile(htmlPath);
   }
 
-  // Don't use blur event - it interferes with toggle
-  // User can click tray icon again to close, or click outside will be handled by OS
+  mainWindow.on('blur', () => {
+    // When window loses focus, hide it after a short delay
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+        console.log('Window blurred, hiding');
+        mainWindow.hide();
+      }
+    }, 100);
+  });
 }
 
-function createTray() {
-  // Create a simple icon - in production, use a proper icon file
-  const iconPath = path.join(__dirname, '..', 'assets', 'trayIconTemplate.png');
-  let icon: Electron.NativeImage;
-
-  try {
-    icon = nativeImage.createFromPath(iconPath);
-    if (icon.isEmpty()) {
-      // Fallback: create a simple 16x16 icon
-      icon = nativeImage.createEmpty();
-    }
-  } catch {
-    icon = nativeImage.createEmpty();
-  }
-
-  // If icon is empty, create a basic one programmatically
-  if (icon.isEmpty()) {
-    // Create a 16x16 basic icon
-    const size = 16;
-    const canvas = Buffer.alloc(size * size * 4);
-    for (let i = 0; i < size * size; i++) {
-      canvas[i * 4] = 100;     // R
-      canvas[i * 4 + 1] = 100; // G
-      canvas[i * 4 + 2] = 100; // B
-      canvas[i * 4 + 3] = 255; // A
-    }
-    icon = nativeImage.createFromBuffer(canvas, { width: size, height: size });
-  }
-
-  tray = new Tray(icon);
-  tray.setToolTip('Claude Usage Tool');
-
+async function updateTrayMenu() {
+  if (!tray) return;
+  
+  const authenticated = await isAuthenticated();
+  const platformAuthenticated = await isPlatformAuthenticated();
+  
   const contextMenu = Menu.buildFromTemplate([
     { label: 'Refresh', click: () => refreshAllData() },
-    { label: 'Login to Claude', click: () => openLoginWindow() },
+    { type: 'separator' },
+    authenticated 
+      ? { 
+          label: 'Logout from Claude', 
+          click: async () => {
+            await logout();
+            refreshAllData();
+            updateTrayMenu();
+          }
+        }
+      : { label: 'Login to Claude', click: () => openLoginWindow().then(() => updateTrayMenu()) },
+    platformAuthenticated
+      ? {
+          label: 'Logout from Platform',
+          click: async () => {
+            await logout();
+            refreshAllData();
+            updateTrayMenu();
+          }
+        }
+      : { label: 'Login to Platform', click: () => openPlatformLoginWindow().then(() => updateTrayMenu()) },
     { type: 'separator' },
     {
       label: 'About',
@@ -223,20 +228,77 @@ function createTray() {
     },
     { label: 'Quit', click: () => app.quit() },
   ]);
+  
+  tray.setContextMenu(contextMenu);
+}
+
+function createTray() {
+  // Create a simple icon - in production, use a proper icon file
+  const iconPath = path.join(__dirname, '..', 'assets', 'trayIconTemplate.png');
+  let icon: Electron.NativeImage;
+
+  try {
+    icon = nativeImage.createFromPath(iconPath);
+    if (icon.isEmpty()) {
+      // Fallback: create a simple 16x16 icon
+      icon = nativeImage.createEmpty();
+    }
+  } catch {
+    icon = nativeImage.createEmpty();
+  }
+
+  // If icon is empty, create a basic one programmatically
+  if (icon.isEmpty()) {
+    // Create a 16x16 basic icon
+    const size = 16;
+    const canvas = Buffer.alloc(size * size * 4);
+    for (let i = 0; i < size * size; i++) {
+      canvas[i * 4] = 100;     // R
+      canvas[i * 4 + 1] = 100; // G
+      canvas[i * 4 + 2] = 100; // B
+      canvas[i * 4 + 3] = 255; // A
+    }
+    icon = nativeImage.createFromBuffer(canvas, { width: size, height: size });
+  }
+
+  tray = new Tray(icon);
+  tray.setToolTip('Claude Usage Tool');
+
+  // Initial menu
+  updateTrayMenu();
 
   tray.on('click', () => {
     if (!mainWindow) return;
     
-    // Immediate toggle: if visible, hide it; if hidden, show it
-    if (mainWindow.isVisible()) {
-      mainWindow.hide();
-    } else {
-      showWindow();
+    // Debounce clicks to prevent rapid toggling
+    const now = Date.now();
+    if (now - lastClickTime < CLICK_DEBOUNCE) {
+      console.log('Click debounced');
+      return;
     }
+    lastClickTime = now;
+    
+    // Use setImmediate to ensure state is consistent
+    setImmediate(() => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      
+      const isVisible = mainWindow.isVisible();
+      const isFocused = mainWindow.isFocused();
+      console.log('Tray clicked - visible:', isVisible, 'focused:', isFocused);
+      
+      // Simple logic: if visible (regardless of focus), hide it. Otherwise show it.
+      if (isVisible) {
+        console.log('Hiding window');
+        mainWindow.hide();
+      } else {
+        console.log('Showing window');
+        showWindow();
+      }
+    });
   });
 
   tray.on('right-click', () => {
-    tray?.popUpContextMenu(contextMenu);
+    updateTrayMenu();
   });
 }
 
@@ -282,6 +344,37 @@ function showWindow() {
   mainWindow.show();
 }
 
+let lastNotifiedPercentages: Map<string, number> = new Map();
+
+function checkAndNotify(claudeUsage: any) {
+  const threshold = store.get('notificationThreshold', 80);
+  if (threshold === 0 || !claudeUsage?.bars) return;
+
+  claudeUsage.bars.forEach((bar: any) => {
+    const label = bar.label || 'Usage';
+    const percentage = bar.percentage || 0;
+    const lastNotified = lastNotifiedPercentages.get(label) || 0;
+
+    // Notify if crossed threshold and haven't notified for this level yet
+    if (percentage >= threshold && lastNotified < threshold) {
+      const { Notification } = require('electron');
+      const notification = new Notification({
+        title: 'Claude Usage Alert',
+        body: `${label}: ${percentage}% used (threshold: ${threshold}%)`,
+        icon: path.join(__dirname, '..', 'assets', 'icon.png'),
+      });
+      notification.show();
+      lastNotifiedPercentages.set(label, percentage);
+      addLog(`Notification: ${label} at ${percentage}%`);
+    }
+
+    // Reset notification if usage dropped below threshold
+    if (percentage < threshold - 10) {
+      lastNotifiedPercentages.set(label, 0);
+    }
+  });
+}
+
 async function refreshAllData() {
   if (!mainWindow) return;
 
@@ -293,6 +386,7 @@ async function refreshAllData() {
         if (result) {
           if (result.isAuthenticated) {
             addLog(`Usage: ${result.bars?.length || 0} bars fetched`);
+            checkAndNotify(result);
           } else {
             addLog('Usage: Not authenticated');
           }
@@ -442,12 +536,14 @@ ipcMain.handle('app:get-settings', () => {
   return {
     refreshInterval: store.get('refreshInterval', 60),
     autoStart: store.get('autoStart', false),
+    notificationThreshold: store.get('notificationThreshold', 80),
   };
 });
 
 ipcMain.handle('app:save-settings', async (_event, settings: AppSettings) => {
   store.set('refreshInterval', settings.refreshInterval);
   store.set('autoStart', settings.autoStart);
+  store.set('notificationThreshold', settings.notificationThreshold);
   
   // Restart auto-refresh with new interval
   startAutoRefresh();

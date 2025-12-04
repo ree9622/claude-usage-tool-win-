@@ -10,6 +10,7 @@ export function Settings({ onClose }: SettingsProps) {
   const { language, setLanguage, t } = useLanguage();
   const [refreshInterval, setRefreshInterval] = useState(60);
   const [autoStartEnabled, setAutoStartEnabled] = useState(false);
+  const [notificationThreshold, setNotificationThreshold] = useState(80);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -18,6 +19,7 @@ export function Settings({ onClose }: SettingsProps) {
         const settings = await window.electronAPI.getSettings();
         setRefreshInterval(settings.refreshInterval || 60);
         setAutoStartEnabled(settings.autoStart || false);
+        setNotificationThreshold(settings.notificationThreshold || 80);
       }
       setLoading(false);
     };
@@ -29,6 +31,7 @@ export function Settings({ onClose }: SettingsProps) {
       await window.electronAPI.saveSettings({
         refreshInterval,
         autoStart: autoStartEnabled,
+        notificationThreshold,
       });
     }
     onClose();
@@ -127,6 +130,25 @@ export function Settings({ onClose }: SettingsProps) {
             </span>
             <span className="toggle-switch" />
           </button>
+        </div>
+
+        <div className="settings-item">
+          <label>{t.notificationThreshold}</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="5"
+              value={notificationThreshold}
+              onChange={(e) => setNotificationThreshold(Number(e.target.value))}
+              className="settings-input"
+              style={{ width: 80 }}
+            />
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              % ({notificationThreshold === 0 ? t.notificationDisabled : `${notificationThreshold}%`})
+            </span>
+          </div>
         </div>
 
         <div style={{ marginTop: 20, textAlign: 'right' }}>

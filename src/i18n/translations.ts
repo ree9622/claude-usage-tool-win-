@@ -25,6 +25,8 @@ export interface Translations {
   autoStart: string;
   autoStartEnabled: string;
   autoStartDisabled: string;
+  notificationThreshold: string;
+  notificationDisabled: string;
   
   // Common
   loading: string;
@@ -54,6 +56,8 @@ export const translations: Record<Language, Translations> = {
     autoStart: 'Auto Start',
     autoStartEnabled: 'Enabled',
     autoStartDisabled: 'Disabled',
+    notificationThreshold: 'Usage Alert Threshold',
+    notificationDisabled: 'Disabled',
     
     loading: 'Loading...',
     close: 'Close',
@@ -80,6 +84,8 @@ export const translations: Record<Language, Translations> = {
     autoStart: '자동 시작',
     autoStartEnabled: '활성화',
     autoStartDisabled: '비활성화',
+    notificationThreshold: '사용량 알림 임계값',
+    notificationDisabled: '비활성화',
     
     loading: '로딩 중...',
     close: '닫기',

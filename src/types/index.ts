@@ -38,6 +38,7 @@ export interface RefreshData {
 export interface AppSettings {
   refreshInterval: number;
   autoStart: boolean;
+  notificationThreshold: number; // Percentage threshold for notifications (0 = disabled)
 }
 
 // Window type augmentation for Electron API
