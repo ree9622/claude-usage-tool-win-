@@ -38,6 +38,7 @@ export interface ElectronAPI {
   getSettings: () => Promise<AppSettings>;
   saveSettings: (settings: AppSettings) => Promise<void>;
   setAutoStart: (enabled: boolean) => Promise<void>;
+  hideWindow: () => void;
 }
 
 const electronAPI: ElectronAPI = {
@@ -56,6 +57,7 @@ const electronAPI: ElectronAPI = {
   getSettings: () => ipcRenderer.invoke('app:get-settings'),
   saveSettings: (settings: AppSettings) => ipcRenderer.invoke('app:save-settings', settings),
   setAutoStart: (enabled: boolean) => ipcRenderer.invoke('app:set-auto-start', enabled),
+  hideWindow: () => ipcRenderer.send('window:hide'),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

@@ -467,6 +467,12 @@ ipcMain.handle('app:set-auto-start', async (_event, enabled: boolean) => {
   });
 });
 
+ipcMain.on('window:hide', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.hide();
+  }
+});
+
 // App lifecycle
 app.whenReady().then(() => {
   createWindow();

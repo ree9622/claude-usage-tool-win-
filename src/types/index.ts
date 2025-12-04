@@ -53,6 +53,7 @@ declare global {
       getSettings?: () => Promise<AppSettings>;
       saveSettings?: (settings: AppSettings) => Promise<void>;
       setAutoStart?: (enabled: boolean) => Promise<void>;
+      hideWindow?: () => void;
     };
   }
 }

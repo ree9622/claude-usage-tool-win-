@@ -143,6 +143,12 @@ function App() {
     ? `Claude ${planName} ${t.planUsage}` 
     : `Claude "${planName}" ${t.planUsage}`;
 
+  const handleClose = () => {
+    if (isElectron && window.electronAPI) {
+      window.electronAPI.hideWindow();
+    }
+  };
+
   return (
     <>
       <div className="panel" style={{ width: 320, maxHeight: 480, overflowY: 'auto' }}>
@@ -185,6 +191,14 @@ function App() {
               style={{ padding: '4px 8px', fontSize: 10 }}
             >
               {loading ? '...' : t.refresh}
+            </button>
+            <button
+              className="btn btn-icon"
+              onClick={handleClose}
+              title={language === 'ko' ? '닫기' : 'Close'}
+              style={{ padding: '3px 5px', fontSize: 16, lineHeight: 1 }}
+            >
+              ×
             </button>
           </div>
         </div>
