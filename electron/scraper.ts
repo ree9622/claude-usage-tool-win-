@@ -337,7 +337,7 @@ export async function scrapeClaudeUsage(): Promise<ClaudeMaxUsage | null> {
                 if (label === '월간 한도') label = 'Monthly limit';
                 
                 // Find reset info (Korean or English) - search only in beforeText for better accuracy
-                // Korean patterns: "4시간 18분 후 재설정", "(토) 오후 4:00에 재설정"
+                // Korean patterns: "Resets in 4 hours 18 minutes", "Resets Sat 4:00 PM"
                 // English patterns: "Resets in 4 hr 18 min", "Resets Sat 4:00 PM"
                 let resetInfo = '';
                 
